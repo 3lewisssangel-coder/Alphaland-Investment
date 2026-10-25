@@ -1,0 +1,173 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account containing mobile number, balance, and referral information",
+      "type": "object",
+      "properties": {
+        "mobileNumber": {
+          "type": "string",
+          "description": "User mobile phone number used for login",
+          "minLength": 8,
+          "maxLength": 20
+        },
+        "password": {
+          "type": "string",
+          "description": "User password for account security",
+          "minLength": 4,
+          "maxLength": 64
+        },
+        "balance": {
+          "type": "number",
+          "description": "Available withdrawable and investable balance"
+        },
+        "referralCode": {
+          "type": "string",
+          "description": "Unique referral code for sharing with peers",
+          "minLength": 4,
+          "maxLength": 16
+        },
+        "referredBy": {
+          "type": "string",
+          "description": "Referral code of upline sponsor or null if none",
+          "maxLength": 16
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when user signed up"
+        }
+      },
+      "required": ["mobileNumber", "password", "balance", "referralCode", "createdAt"]
+    },
+    "Investment": {
+      "title": "Investment",
+      "description": "Purchased real estate micro-investment plan",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the owner user",
+          "maxLength": 128
+        },
+        "planName": {
+          "type": "string",
+          "description": "Name of the real estate investment plan",
+          "maxLength": 64
+        },
+        "cost": {
+          "type": "number",
+          "description": "Initial purchase cost in pesos/credits"
+        },
+        "dailyReturn": {
+          "type": "number",
+          "description": "Guaranteed daily payout"
+        },
+        "daysRemaining": {
+          "type": "number",
+          "description": "Remaining payout days (starts at 14)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Purchase timestamp"
+        }
+      },
+      "required": ["userId", "planName", "cost", "dailyReturn", "daysRemaining", "createdAt"]
+    },
+    "Deposit": {
+      "title": "Deposit",
+      "description": "Deposit transaction submission with payment proof",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of user submitting deposit",
+          "maxLength": 128
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount deposited"
+        },
+        "proofImageUrl": {
+          "type": "string",
+          "description": "Storage URL or data URL of payment proof screenshot",
+          "maxLength": 5000000
+        },
+        "status": {
+          "type": "string",
+          "description": "Verification status",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when submitted"
+        }
+      },
+      "required": ["userId", "amount", "proofImageUrl", "status", "createdAt"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "Withdrawal request submitted by an active investor",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of user requesting payout",
+          "maxLength": 128
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount to withdraw"
+        },
+        "status": {
+          "type": "string",
+          "description": "Processing status",
+          "enum": ["pending", "approved", "paid"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of withdrawal request"
+        }
+      },
+      "required": ["userId", "amount", "status", "createdAt"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global application configuration",
+      "type": "object",
+      "properties": {
+        "activeDepositQrUrl": {
+          "type": "string",
+          "description": "Active deposit QR code image URL uploaded by admin",
+          "maxLength": 5000000
+        }
+      },
+      "required": ["activeDepositQrUrl"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts with balance, credentials, and referral metadata"
+    },
+    "/investments/{investmentId}": {
+      "schema": "Investment",
+      "description": "Purchased micro-investment contracts with daily returns"
+    },
+    "/deposits/{depositId}": {
+      "schema": "Deposit",
+      "description": "Payment submissions awaiting admin verification"
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": "Withdrawal",
+      "description": "Withdrawal queue processed manually"
+    },
+    "/settings/{settingId}": {
+      "schema": "AppConfig",
+      "description": "Global system configurations including active QR code"
+    }
+  }
+}

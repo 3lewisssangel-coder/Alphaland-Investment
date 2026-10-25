@@ -1,0 +1,6 @@
+{
+  "name": "Alphaland Investment",
+  "description": "Premier real estate micro-investment platform with high-yield daily returns, multi-tier referral rewards, and secure deposit verification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
