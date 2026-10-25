@@ -67,6 +67,20 @@
           "type": "number",
           "description": "Remaining payout days (starts at 14)"
         },
+        "daysCollectedCount": {
+          "type": "number",
+          "description": "Total number of daily return claims completed (0 to 14)"
+        },
+        "lastCollectedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the most recent daily payout collection"
+        },
+        "status": {
+          "type": "string",
+          "description": "Contract status: active or completed",
+          "enum": ["active", "completed"]
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

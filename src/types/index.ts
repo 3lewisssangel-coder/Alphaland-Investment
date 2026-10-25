@@ -32,6 +32,9 @@ export interface InvestmentDoc {
   cost: number;
   dailyReturn: number;
   daysRemaining: number;
+  daysCollectedCount?: number;
+  lastCollectedAt?: Timestamp | string | any;
+  status?: 'active' | 'completed';
   createdAt: Timestamp | string | any;
   lastClaimedAt?: Timestamp | string | any;
   totalClaimed?: number;

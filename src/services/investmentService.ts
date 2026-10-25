@@ -63,6 +63,9 @@ export async function purchaseInvestmentPlan(
       cost: plan.cost,
       dailyReturn: plan.dailyReturn,
       daysRemaining: plan.durationDays,
+      daysCollectedCount: 0,
+      lastCollectedAt: serverTimestamp(),
+      status: 'active' as const,
       createdAt: serverTimestamp(),
       lastClaimedAt: serverTimestamp(),
       totalClaimed: 0,
@@ -200,13 +203,91 @@ export function listenToUserInvestments(
   );
 }
 
+export const COOLDOWN_MS = 24 * 60 * 60 * 1000; // Strict 24-hour cooldown (86,400,000 ms)
+
 /**
- * Claim daily return for an active investment
+ * Extracts milliseconds from Firestore Timestamp, Date, or string
+ */
+export function getTimestampMs(ts: any): number | null {
+  if (!ts) return null;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+  if (ts.seconds !== undefined) {
+    return ts.seconds * 1000 + (ts.nanoseconds ? Math.floor(ts.nanoseconds / 1000000) : 0);
+  }
+  if (ts instanceof Date) return ts.getTime();
+  if (typeof ts === 'string' || typeof ts === 'number') {
+    const parsed = new Date(ts).getTime();
+    return isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+/**
+ * Calculates current cooldown status and formatted remaining time
+ */
+export function getInvestmentCooldownStatus(inv: InvestmentDoc): {
+  isCompleted: boolean;
+  canCollect: boolean;
+  remainingMs: number;
+  formattedRemaining: string;
+} {
+  const currentDays = inv.daysCollectedCount ?? (14 - (inv.daysRemaining ?? 14));
+  if (
+    currentDays >= 14 ||
+    inv.status === 'completed' ||
+    (inv.daysRemaining !== undefined && inv.daysRemaining <= 0)
+  ) {
+    return {
+      isCompleted: true,
+      canCollect: false,
+      remainingMs: 0,
+      formattedRemaining: 'Contract Completed (14/14 Days Claimed)',
+    };
+  }
+
+  // If no last collection or creation time is recorded, allow first claim
+  const lastMs = getTimestampMs(inv.lastCollectedAt || inv.lastClaimedAt);
+  if (!lastMs) {
+    return {
+      isCompleted: false,
+      canCollect: true,
+      remainingMs: 0,
+      formattedRemaining: 'Ready to Collect',
+    };
+  }
+
+  const elapsed = Date.now() - lastMs;
+  if (elapsed >= COOLDOWN_MS) {
+    return {
+      isCompleted: false,
+      canCollect: true,
+      remainingMs: 0,
+      formattedRemaining: 'Ready to Collect',
+    };
+  }
+
+  const remainingMs = COOLDOWN_MS - elapsed;
+  const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+  const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
+
+  return {
+    isCompleted: false,
+    canCollect: false,
+    remainingMs,
+    formattedRemaining: `Next in ${hours}h ${minutes}m ${seconds}s`,
+  };
+}
+
+/**
+ * Claim daily return for an active investment with strict 24-hour server-side cooldown check.
+ * Atomically updates user balance and contract metadata via Firestore transaction.
  */
 export async function claimDailyPayout(
   investmentId: string,
   userId: string
-): Promise<{ amountCredited: number; daysRemaining: number }> {
+): Promise<{ amountCredited: number; daysRemaining: number; daysCollectedCount: number }> {
   const invRef = doc(db, INVESTMENTS_COLLECTION, investmentId);
   const userRef = doc(db, USERS_COLLECTION, userId);
 
@@ -221,29 +302,56 @@ export async function claimDailyPayout(
       throw new Error('Unauthorized investment claim');
     }
 
-    if (invData.daysRemaining <= 0) {
-      throw new Error('This investment contract has completed its 14-day duration.');
+    const currentDaysCollected = invData.daysCollectedCount ?? (14 - (invData.daysRemaining ?? 14));
+    if (
+      currentDaysCollected >= 14 ||
+      invData.status === 'completed' ||
+      (invData.daysRemaining !== undefined && invData.daysRemaining <= 0)
+    ) {
+      throw new Error('This investment contract has completed its full 14-day duration.');
+    }
+
+    // Server-Side Timestamp Validation: Compare current time against lastCollectedAt
+    const lastClaimMs = getTimestampMs(invData.lastCollectedAt || invData.lastClaimedAt);
+    const nowMs = Date.now();
+
+    if (lastClaimMs) {
+      const elapsed = nowMs - lastClaimMs;
+      if (elapsed < COOLDOWN_MS) {
+        const remainingMs = COOLDOWN_MS - elapsed;
+        const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+        const remainingMinutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+        throw new Error(
+          `Collection on 24-hour cooldown. Next collection available in ${remainingHours}h ${remainingMinutes}m.`
+        );
+      }
     }
 
     const dailyReturn = invData.dailyReturn;
-    const newDaysRemaining = invData.daysRemaining - 1;
+    const nextDaysCollected = currentDaysCollected + 1;
+    const nextDaysRemaining = Math.max(0, 14 - nextDaysCollected);
+    const isCompleted = nextDaysCollected >= 14;
 
-    // Credit balance
+    // 1. Atomically increment user's balance and total earnings
     transaction.update(userRef, {
       balance: increment(dailyReturn),
       totalEarnings: increment(dailyReturn),
     });
 
-    // Update investment doc
+    // 2. Atomically update investment document with lastCollectedAt server timestamp, incremented daysCollectedCount, and status
     transaction.update(invRef, {
-      daysRemaining: newDaysRemaining,
-      totalClaimed: (invData.totalClaimed || 0) + dailyReturn,
+      lastCollectedAt: serverTimestamp(),
       lastClaimedAt: serverTimestamp(),
+      daysCollectedCount: nextDaysCollected,
+      daysRemaining: nextDaysRemaining,
+      status: isCompleted ? 'completed' : 'active',
+      totalClaimed: (invData.totalClaimed || 0) + dailyReturn,
     });
 
     return {
       amountCredited: dailyReturn,
-      daysRemaining: newDaysRemaining,
+      daysRemaining: nextDaysRemaining,
+      daysCollectedCount: nextDaysCollected,
     };
   });
 }

@@ -16,7 +16,11 @@ import {
 import confetti from 'canvas-confetti';
 import { INVESTMENT_PLANS } from '../data/plans';
 import { InvestmentDoc, InvestmentPlan, UserAccount } from '../types';
-import { purchaseInvestmentPlan, claimDailyPayout } from '../services/investmentService';
+import {
+  purchaseInvestmentPlan,
+  claimDailyPayout,
+  getInvestmentCooldownStatus,
+} from '../services/investmentService';
 
 interface InvestmentsPanelProps {
   user: UserAccount;
@@ -36,6 +40,16 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimSuccessMsg, setClaimSuccessMsg] = useState<string | null>(null);
+  const [claimErrorMsg, setClaimErrorMsg] = useState<string | null>(null);
+  // Live ticker that triggers re-render every second to update 24h countdown clocks
+  const [, setCurrentTime] = useState<number>(Date.now());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const userBalance = user.balance || 0;
 
@@ -71,15 +85,42 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
   };
 
   const handleClaim = async (inv: InvestmentDoc) => {
+    // Prevent duplicate client spam requests: reject immediately if already claiming
+    if (claimingId === inv.id) return;
+
+    const status = getInvestmentCooldownStatus(inv);
+    if (!status.canCollect) {
+      setClaimErrorMsg(
+        status.isCompleted
+          ? 'This investment contract has completed its 14-day duration.'
+          : `Collection is on a 24-hour cooldown. ${status.formattedRemaining}.`
+      );
+      setTimeout(() => setClaimErrorMsg(null), 4000);
+      return;
+    }
+
     try {
       setClaimingId(inv.id);
       setClaimSuccessMsg(null);
+      setClaimErrorMsg(null);
+
       const res = await claimDailyPayout(inv.id, user.id);
-      setClaimSuccessMsg(`Successfully claimed +₱${res.amountCredited.toFixed(2)} to your balance!`);
-      setTimeout(() => setClaimSuccessMsg(null), 3500);
+      setClaimSuccessMsg(
+        `Successfully collected Day ${res.daysCollectedCount} of 14 (+₱${res.amountCredited.toFixed(2)})! 24-hour cooldown activated.`
+      );
+      setTimeout(() => setClaimSuccessMsg(null), 4500);
+
+      confetti({
+        particleCount: 40,
+        spread: 45,
+        origin: { y: 0.7 },
+      });
+
       if (onRefresh) onRefresh();
     } catch (err: any) {
-      alert(err?.message || 'Failed to claim daily payout.');
+      console.error('Claim error:', err);
+      setClaimErrorMsg(err?.message || 'Failed to claim daily payout. Please try again.');
+      setTimeout(() => setClaimErrorMsg(null), 5000);
     } finally {
       setClaimingId(null);
     }
@@ -122,12 +163,21 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
         </div>
       </div>
 
-      {/* Claim Notification Banner */}
+      {/* Claim Notification Banners */}
       {claimSuccessMsg && (
         <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-sm flex items-center justify-between animate-fade-in shadow-lg">
           <div className="flex items-center space-x-2.5">
             <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
             <span className="font-semibold">{claimSuccessMsg}</span>
+          </div>
+        </div>
+      )}
+
+      {claimErrorMsg && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-sm flex items-center justify-between animate-fade-in shadow-lg">
+          <div className="flex items-center space-x-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <span className="font-semibold">{claimErrorMsg}</span>
           </div>
         </div>
       )}
@@ -140,14 +190,16 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
               <Flame className="w-5 h-5 text-amber-400" />
               <h2 className="text-lg font-bold text-white">My Active Contracts ({activeInvestments.length})</h2>
             </div>
-            <span className="text-xs text-slate-400">Claims credit directly to your main balance</span>
+            <span className="text-xs text-slate-400">Strict 24-hour collection cooldown enforced</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeInvestments.map((inv) => {
+              const cooldown = getInvestmentCooldownStatus(inv);
+              const daysCollected = inv.daysCollectedCount ?? Math.max(0, 14 - (inv.daysRemaining ?? 14));
+              const daysLeft = Math.max(0, 14 - daysCollected);
               const totalReturn = inv.dailyReturn * 14;
-              const daysCompleted = Math.max(0, 14 - inv.daysRemaining);
-              const progressPercent = Math.min(100, Math.round((daysCompleted / 14) * 100));
+              const progressPercent = Math.min(100, Math.round((daysCollected / 14) * 100));
 
               return (
                 <div
@@ -157,7 +209,11 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
                   <div className="flex items-start justify-between">
                     <div>
                       <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider block">
-                        Contract Active
+                        {cooldown.isCompleted ? (
+                          <span className="text-emerald-400">Contract Completed</span>
+                        ) : (
+                          `Day ${daysCollected} of 14 Active`
+                        )}
                       </span>
                       <h3 className="text-lg font-black text-white">{inv.planName}</h3>
                       <p className="text-xs text-slate-400">Original Cost: ₱{inv.cost.toLocaleString()}</p>
@@ -171,8 +227,8 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
                   {/* Progress bar */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs text-slate-400">
-                      <span>Day {daysCompleted} of 14</span>
-                      <span className="text-amber-400 font-semibold">{inv.daysRemaining} days left</span>
+                      <span>{daysCollected} of 14 Days Claimed</span>
+                      <span className="text-amber-400 font-semibold">{daysLeft} days remaining</span>
                     </div>
                     <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                       <div
@@ -194,26 +250,40 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
                     </div>
                   </div>
 
-                  {/* Claim Button */}
-                  <button
-                    onClick={() => handleClaim(inv)}
-                    disabled={inv.daysRemaining <= 0 || claimingId === inv.id}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-2 transition disabled:opacity-50"
-                  >
+                  {/* Anti-spam & 24h Cooldown Claim Button */}
+                  <div>
                     {claimingId === inv.id ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Collecting Return...</span>
-                      </>
-                    ) : inv.daysRemaining <= 0 ? (
-                      <span>Contract Completed</span>
+                      <button
+                        disabled
+                        className="w-full py-2.5 px-4 rounded-xl bg-slate-800 text-amber-300 font-bold text-xs flex items-center justify-center space-x-2 border border-slate-700 cursor-wait"
+                      >
+                        <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                        <span>Verifying Server Cooldown...</span>
+                      </button>
+                    ) : cooldown.isCompleted ? (
+                      <div className="w-full py-2.5 px-4 rounded-xl bg-slate-800/90 text-slate-400 font-bold text-xs flex items-center justify-center space-x-1.5 border border-slate-700">
+                        <CheckCircle className="w-4 h-4 text-emerald-400" />
+                        <span>Contract Completed (14/14 Days)</span>
+                      </div>
+                    ) : !cooldown.canCollect ? (
+                      <button
+                        disabled
+                        className="w-full py-2.5 px-4 rounded-xl bg-slate-950 border border-amber-500/30 text-amber-300 font-medium text-xs flex items-center justify-center space-x-2 cursor-not-allowed opacity-90"
+                      >
+                        <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Next collection in {cooldown.formattedRemaining.replace('Next in ', '')}</span>
+                      </button>
                     ) : (
-                      <>
+                      <button
+                        onClick={() => handleClaim(inv)}
+                        disabled={claimingId !== null}
+                        className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-2 transition active:scale-[0.98] disabled:opacity-50"
+                      >
                         <DollarSign className="w-4 h-4" />
                         <span>Collect Today's Return (+₱{inv.dailyReturn})</span>
-                      </>
+                      </button>
                     )}
-                  </button>
+                  </div>
                 </div>
               );
             })}
