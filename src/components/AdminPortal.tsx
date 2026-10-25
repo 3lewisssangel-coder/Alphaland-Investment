@@ -62,6 +62,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onExit }) => {
   const [newQrFile, setNewQrFile] = useState<File | null>(null);
   const [qrUploadSuccess, setQrUploadSuccess] = useState<boolean>(false);
   const [qrUploading, setQrUploading] = useState<boolean>(false);
+  const [qrUploadProgress, setQrUploadProgress] = useState<number>(0);
+  const [qrUploadError, setQrUploadError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -157,14 +159,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onExit }) => {
     if (!newQrFile) return;
     try {
       setQrUploading(true);
-      await updateAdminDepositQr(newQrFile);
+      setQrUploadError(null);
+      setQrUploadProgress(0);
+
+      await updateAdminDepositQr(newQrFile, (progress) => {
+        setQrUploadProgress(progress);
+      });
+
       setQrUploadSuccess(true);
       setNewQrFile(null);
-      setTimeout(() => setQrUploadSuccess(false), 3000);
+      setTimeout(() => setQrUploadSuccess(false), 3500);
     } catch (err: any) {
-      alert(err?.message || 'Failed to update QR code.');
+      console.error('Upload error:', err);
+      const friendlyMessage = err?.message || 'Failed to update QR code. Please check file format and network.';
+      setQrUploadError(friendlyMessage);
     } finally {
       setQrUploading(false);
+      setQrUploadProgress(0);
     }
   };
 
@@ -551,6 +562,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onExit }) => {
             </div>
           )}
 
+          {qrUploadError && (
+            <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <span>{qrUploadError}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
             {/* Current Active QR Display */}
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-center space-y-2">
@@ -579,25 +597,31 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onExit }) => {
                 <input
                   type="file"
                   accept="image/*"
+                  disabled={qrUploading}
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {
                       setNewQrFile(e.target.files[0]);
+                      setQrUploadError(null);
                     }
                   }}
                   required
-                  className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-500/10 file:text-amber-400 hover:file:bg-amber-500/20 cursor-pointer"
+                  className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-500/10 file:text-amber-400 hover:file:bg-amber-500/20 cursor-pointer disabled:opacity-50"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={qrUploading || !newQrFile}
-                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 flex items-center justify-center space-x-2 transition disabled:opacity-50"
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 flex items-center justify-center space-x-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {qrUploading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                    <span>Uploading to admin-qr/...</span>
+                    <span>
+                      {qrUploadProgress > 0
+                        ? `Uploading to admin-qr/... (${qrUploadProgress}%)`
+                        : 'Uploading to admin-qr/...'}
+                    </span>
                   </>
                 ) : (
                   <>

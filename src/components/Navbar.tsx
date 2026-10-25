@@ -45,7 +45,21 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16 sm:h-20">
           {/* Logo */}
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onSelectTab('investments')}>
-            <div className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 font-black shadow-lg shadow-amber-500/20">
+            <div
+              onClick={(e) => {
+                const now = Date.now();
+                const lastClick = (window as any)._navLogoLastClick || 0;
+                const count = (now - lastClick < 1500) ? ((window as any)._navLogoClickCount || 0) + 1 : 1;
+                (window as any)._navLogoLastClick = now;
+                (window as any)._navLogoClickCount = count;
+                if (count >= 5) {
+                  e.stopPropagation();
+                  (window as any)._navLogoClickCount = 0;
+                  window.location.hash = 'admin';
+                }
+              }}
+              className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 font-black shadow-lg shadow-amber-500/20 active:scale-95 transition-transform"
+            >
               <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>

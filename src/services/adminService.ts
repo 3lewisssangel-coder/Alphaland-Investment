@@ -35,20 +35,28 @@ export function verifyAdminCredentials(user: string, pass: string): boolean {
 /**
  * Updates the active deposit QR code in settings/appConfig
  */
-export async function updateAdminDepositQr(file: File): Promise<string> {
-  const downloadUrl = await uploadImageToStorage('admin-qr', file, `qr_${Date.now()}`);
-  const configDocRef = doc(db, SETTINGS_COLLECTION, APP_CONFIG_DOC_ID);
+export async function updateAdminDepositQr(file: File, onProgress?: (percent: number) => void): Promise<string> {
+  try {
+    const downloadUrl = await uploadImageToStorage('admin-qr', file, {
+      customName: `qr_${Date.now()}`,
+      onProgress,
+    });
+    const configDocRef = doc(db, SETTINGS_COLLECTION, APP_CONFIG_DOC_ID);
 
-  await setDoc(
-    configDocRef,
-    {
-      activeDepositQrUrl: downloadUrl,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+    await setDoc(
+      configDocRef,
+      {
+        activeDepositQrUrl: downloadUrl,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
 
-  return downloadUrl;
+    return downloadUrl;
+  } catch (error) {
+    console.error('Upload error in updateAdminDepositQr:', error);
+    throw error;
+  }
 }
 
 /**

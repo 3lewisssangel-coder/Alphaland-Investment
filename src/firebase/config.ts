@@ -8,8 +8,12 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // CRITICAL: The app requires firebaseConfig.firestoreDatabaseId as specified in skill guidelines
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Ensure storageBucket is explicitly defined to prevent storage references from hanging
+const rawBucket = firebaseConfig.storageBucket || `${firebaseConfig.projectId}.firebasestorage.app`;
+export const storageBucketUrl = rawBucket.startsWith('gs://') ? rawBucket : `gs://${rawBucket}`;
+
 export const auth = getAuth(app);
-export const storage = getStorage(app);
+export const storage = getStorage(app, storageBucketUrl);
 
 // Connection test as required by skill guidelines
 export async function testConnection(): Promise<boolean> {

@@ -84,7 +84,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 space-y-6">
         {/* Brand identity */}
         <div className="text-center space-y-2">
-          <div className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-700/10 border border-amber-500/30 text-amber-400 shadow-xl">
+          <div
+            onClick={() => {
+              const now = Date.now();
+              const lastClick = (window as any)._logoLastClick || 0;
+              const count = (now - lastClick < 1500) ? ((window as any)._logoClickCount || 0) + 1 : 1;
+              (window as any)._logoLastClick = now;
+              (window as any)._logoClickCount = count;
+              if (count >= 5) {
+                (window as any)._logoClickCount = 0;
+                window.location.hash = 'admin';
+              }
+            }}
+            className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-700/10 border border-amber-500/30 text-amber-400 shadow-xl cursor-pointer select-none active:scale-95 transition-transform"
+            title="Alphaland Investment"
+          >
             <Building2 className="w-8 h-8" />
           </div>
           <h1 className="text-3xl font-black text-white tracking-tight">

@@ -25,6 +25,8 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+
   // Real-time listener for activeDepositQrUrl in settings/appConfig
   useEffect(() => {
     if (!isOpen) return;
@@ -61,11 +63,14 @@ export const DepositModal: React.FC<DepositModalProps> = ({
     try {
       setSubmitting(true);
       setError(null);
+      setUploadProgress(0);
 
       // 1. Upload proof screenshot to Firebase Storage bucket deposit-proofs/
       let proofUrl = '';
       if (selectedFile) {
-        proofUrl = await uploadImageToStorage('deposit-proofs', selectedFile);
+        proofUrl = await uploadImageToStorage('deposit-proofs', selectedFile, {
+          onProgress: (p) => setUploadProgress(p),
+        });
       } else if (previewUrl) {
         proofUrl = previewUrl;
       }
@@ -82,9 +87,11 @@ export const DepositModal: React.FC<DepositModalProps> = ({
         onClose();
       }, 2500);
     } catch (err: any) {
-      setError(err?.message || 'Failed to submit deposit. Please try again.');
+      console.error('Upload error:', err);
+      setError(err?.message || 'Failed to submit deposit. Please check file format and network connection.');
     } finally {
       setSubmitting(false);
+      setUploadProgress(0);
     }
   };
 
@@ -258,12 +265,12 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-2/3 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20 flex items-center justify-center space-x-2 transition disabled:opacity-60"
+                className="w-2/3 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20 flex items-center justify-center space-x-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Uploading Proof...</span>
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                    <span>{uploadProgress > 0 ? `Uploading (${uploadProgress}%)...` : 'Uploading Proof...'}</span>
                   </>
                 ) : (
                   <span>Submit Deposit Proof</span>

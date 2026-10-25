@@ -32,7 +32,7 @@ export default function App() {
     getAppConfig().catch(console.error);
   }, []);
 
-  // Detect secret /admin route via pathname or hash
+  // Detect secret /admin route via pathname, hash, or secret key combo (Ctrl+Shift+A)
   useEffect(() => {
     const checkAdminRoute = () => {
       const path = window.location.pathname.toLowerCase();
@@ -44,12 +44,24 @@ export default function App() {
       }
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Secret key combination: Ctrl+Shift+A or Cmd+Shift+A
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        window.location.hash = 'admin';
+        setIsAdminRoute(true);
+      }
+    };
+
     checkAdminRoute();
     window.addEventListener('popstate', checkAdminRoute);
     window.addEventListener('hashchange', checkAdminRoute);
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
       window.removeEventListener('popstate', checkAdminRoute);
       window.removeEventListener('hashchange', checkAdminRoute);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
