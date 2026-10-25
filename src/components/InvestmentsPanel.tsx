@@ -20,6 +20,7 @@ import {
   purchaseInvestmentPlan,
   claimDailyPayout,
   getInvestmentCooldownStatus,
+  autoCreditDueInvestments,
 } from '../services/investmentService';
 
 interface InvestmentsPanelProps {
@@ -41,6 +42,7 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimSuccessMsg, setClaimSuccessMsg] = useState<string | null>(null);
   const [claimErrorMsg, setClaimErrorMsg] = useState<string | null>(null);
+  const [autoCreditBanner, setAutoCreditBanner] = useState<string | null>(null);
   // Live ticker that triggers re-render every second to update 24h countdown clocks
   const [, setCurrentTime] = useState<number>(Date.now());
 
@@ -50,6 +52,32 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Automatic crediting check whenever user opens dashboard / loads active plans
+  React.useEffect(() => {
+    if (!user?.id) return;
+    autoCreditDueInvestments(user.id)
+      .then((res) => {
+        if (res.totalCredited > 0) {
+          const count = res.creditedPlans.length;
+          const plansList = res.creditedPlans
+            .map((p) => `${p.planName} (+₱${p.amount} for ${p.cycles}d)`)
+            .join(', ');
+          setAutoCreditBanner(
+            `✨ Auto-credited +₱${res.totalCredited.toFixed(2)} to your balance from ${count} property contract${count > 1 ? 's' : ''}: ${plansList}`
+          );
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.6 },
+          });
+          if (onRefresh) onRefresh();
+        }
+      })
+      .catch((err) => {
+        console.error('Auto-credit error:', err);
+      });
+  }, [user?.id]);
 
   const userBalance = user.balance || 0;
 
@@ -162,6 +190,27 @@ export const InvestmentsPanel: React.FC<InvestmentsPanelProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Auto-Credit Notification Banner */}
+      {autoCreditBanner && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-emerald-500/15 to-amber-500/10 border border-amber-500/40 text-amber-200 text-sm flex items-center justify-between animate-fade-in shadow-xl">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 font-bold shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-bold text-white block">Automatic Daily Return Credited!</span>
+              <span className="text-xs text-amber-300/90">{autoCreditBanner}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setAutoCreditBanner(null)}
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-bold transition ml-2 shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Claim Notification Banners */}
       {claimSuccessMsg && (

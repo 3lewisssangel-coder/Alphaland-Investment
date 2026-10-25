@@ -388,3 +388,111 @@ export function listenToUserCommissions(
     }
   );
 }
+
+/**
+ * Automatically checks and credits mature 24-hour return cycles for all active investments.
+ * Executed whenever a user opens their dashboard or portfolio.
+ * 100% database-backed calculation and atomic transaction updates in Firestore.
+ */
+export async function autoCreditDueInvestments(userId: string): Promise<{
+  totalCredited: number;
+  creditedPlans: { planName: string; cycles: number; amount: number }[];
+}> {
+  if (!userId) return { totalCredited: 0, creditedPlans: [] };
+
+  try {
+    const q = query(
+      collection(db, INVESTMENTS_COLLECTION),
+      where('userId', '==', userId)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      return { totalCredited: 0, creditedPlans: [] };
+    }
+
+    let totalCredited = 0;
+    const creditedPlans: { planName: string; cycles: number; amount: number }[] = [];
+
+    for (const docSnap of snap.docs) {
+      const invData = docSnap.data() as InvestmentDoc;
+      const invId = docSnap.id;
+
+      const currentDaysCollected = invData.daysCollectedCount ?? (14 - (invData.daysRemaining ?? 14));
+      if (
+        currentDaysCollected >= 14 ||
+        invData.status === 'completed' ||
+        (invData.daysRemaining !== undefined && invData.daysRemaining <= 0)
+      ) {
+        continue;
+      }
+
+      const baseMs = getTimestampMs(invData.lastCollectedAt || invData.lastClaimedAt || invData.createdAt);
+      if (!baseMs) continue;
+
+      const elapsedMs = Date.now() - baseMs;
+      const maxRemainingCycles = Math.max(0, 14 - currentDaysCollected);
+      const rawCycles = Math.floor(elapsedMs / COOLDOWN_MS);
+      const claimableCycles = Math.min(rawCycles, maxRemainingCycles);
+
+      if (claimableCycles >= 1) {
+        try {
+          const invRef = doc(db, INVESTMENTS_COLLECTION, invId);
+          const userRef = doc(db, USERS_COLLECTION, userId);
+
+          await runTransaction(db, async (transaction) => {
+            const freshInvSnap = await transaction.get(invRef);
+            if (!freshInvSnap.exists()) return;
+
+            const freshInv = freshInvSnap.data() as InvestmentDoc;
+            const freshDays = freshInv.daysCollectedCount ?? (14 - (freshInv.daysRemaining ?? 14));
+            if (freshDays >= 14 || freshInv.status === 'completed') return;
+
+            const freshBaseMs = getTimestampMs(freshInv.lastCollectedAt || freshInv.lastClaimedAt || freshInv.createdAt);
+            if (!freshBaseMs) return;
+
+            const freshElapsed = Date.now() - freshBaseMs;
+            const freshMaxRemaining = Math.max(0, 14 - freshDays);
+            const freshCycles = Math.min(Math.floor(freshElapsed / COOLDOWN_MS), freshMaxRemaining);
+
+            if (freshCycles < 1) return;
+
+            const payoutAmount = freshCycles * freshInv.dailyReturn;
+            const nextDaysCollected = freshDays + freshCycles;
+            const nextDaysRemaining = Math.max(0, 14 - nextDaysCollected);
+            const isCompleted = nextDaysCollected >= 14;
+
+            // 1. Atomically add that total amount to the user's balance in Firestore
+            transaction.update(userRef, {
+              balance: increment(payoutAmount),
+              totalEarnings: increment(payoutAmount),
+            });
+
+            // 2. Update investment's lastCollectedAt timestamp and increment daysCollectedCount
+            transaction.update(invRef, {
+              lastCollectedAt: serverTimestamp(),
+              lastClaimedAt: serverTimestamp(),
+              daysCollectedCount: nextDaysCollected,
+              daysRemaining: nextDaysRemaining,
+              status: isCompleted ? 'completed' : 'active',
+              totalClaimed: (freshInv.totalClaimed || 0) + payoutAmount,
+            });
+
+            totalCredited += payoutAmount;
+            creditedPlans.push({
+              planName: freshInv.planName,
+              cycles: freshCycles,
+              amount: payoutAmount,
+            });
+          });
+        } catch (txError) {
+          console.error(`Auto-credit failed for contract ${invId}:`, txError);
+        }
+      }
+    }
+
+    return { totalCredited, creditedPlans };
+  } catch (err) {
+    console.error('Error during auto-credit check:', err);
+    return { totalCredited: 0, creditedPlans: [] };
+  }
+}
