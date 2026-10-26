@@ -14,10 +14,13 @@ import {
   Clock,
   Sparkles,
   QrCode,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
-import { CommissionRecord, UserAccount } from '../types';
+import { CommissionRecord, UserAccount, AppConfigDoc } from '../types';
 import { fetchUserTeamHierarchy } from '../services/userService';
 import { listenToUserCommissions } from '../services/investmentService';
+import { listenToAppConfig, SAMPLE_QR_SVG } from '../services/walletService';
 
 interface TeamPanelProps {
   user: UserAccount;
@@ -25,6 +28,8 @@ interface TeamPanelProps {
 
 export const TeamPanel: React.FC<TeamPanelProps> = ({ user }) => {
   const [copied, setCopied] = useState(false);
+  const [copiedCommunity, setCopiedCommunity] = useState(false);
+  const [appConfig, setAppConfig] = useState<AppConfigDoc | null>(null);
   const [teamData, setTeamData] = useState<{
     level1: UserAccount[];
     level2: UserAccount[];
@@ -51,15 +56,22 @@ export const TeamPanel: React.FC<TeamPanelProps> = ({ user }) => {
         if (isMounted) setLoadingTeam(false);
       });
 
-    const unsubscribe = listenToUserCommissions(user.id, (records) => {
+    const unsubCommissions = listenToUserCommissions(user.id, (records) => {
       if (isMounted) {
         setCommissions(records);
       }
     });
 
+    const unsubConfig = listenToAppConfig((cfg) => {
+      if (isMounted) {
+        setAppConfig(cfg);
+      }
+    });
+
     return () => {
       isMounted = false;
-      unsubscribe();
+      unsubCommissions();
+      unsubConfig();
     };
   }, [user.id, user.referralCode]);
 
@@ -196,6 +208,89 @@ export const TeamPanel: React.FC<TeamPanelProps> = ({ user }) => {
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
             <span className="text-slate-400">Network Count:</span>
             <span className="font-bold text-white">{teamData.level3.length} Members</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Permanent Community Chat & QR Section */}
+      <div className="relative rounded-3xl overflow-hidden border border-emerald-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/30 p-6 sm:p-8 shadow-2xl">
+        <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -mr-16 -mt-16" />
+
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-4 flex-1">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Official Investor Community</span>
+            </div>
+
+            <div className="space-y-1">
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                Connect with the Alphaland Team
+              </h2>
+              <p className="text-slate-300 text-xs sm:text-sm max-w-lg leading-relaxed">
+                Join our official community channel to receive direct admin announcements, daily payout proofs, leadership guidance, and recruitment strategies for your 3-level affiliate network.
+              </p>
+            </div>
+
+            {/* Direct Link & Copy */}
+            <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 flex items-center justify-between gap-2 max-w-lg">
+              <span className="text-xs text-slate-300 font-mono truncate px-1 select-all">
+                {appConfig?.communityChatLink || 'https://t.me/alphaland_official_group'}
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    appConfig?.communityChatLink || 'https://t.me/alphaland_official_group'
+                  );
+                  setCopiedCommunity(true);
+                  setTimeout(() => setCopiedCommunity(false), 2500);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center space-x-1 shrink-0"
+              >
+                {copiedCommunity ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Clickable Join Community Button */}
+            <div className="pt-1">
+              <a
+                href={appConfig?.communityChatLink || 'https://t.me/alphaland_official_group'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-2 py-3 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 transition"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Join Official Community Chat</span>
+                <ExternalLink className="w-3.5 h-3.5 ml-1" />
+              </a>
+            </div>
+          </div>
+
+          {/* QR Code Presentation */}
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-center space-y-2 shrink-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              Scan with Phone
+            </span>
+            <div className="w-40 h-40 bg-white p-2 rounded-xl shadow-lg border border-emerald-500/20 flex items-center justify-center overflow-hidden">
+              <img
+                src={appConfig?.communityQrUrl || appConfig?.activeDepositQrUrl || SAMPLE_QR_SVG}
+                alt="Community Group QR"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <span className="text-[10px] text-slate-500 block">
+              Direct Group Invite QR
+            </span>
           </div>
         </div>
       </div>

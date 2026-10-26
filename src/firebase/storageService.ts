@@ -11,12 +11,12 @@ export interface UploadOptions {
  * Uploads an image file to Firebase Storage.
  * Wrapped in strict try/catch/finally with timeout watchdog to prevent hanging.
  * 
- * @param folder 'deposit-proofs' | 'admin-qr'
+ * @param folder 'deposit-proofs' | 'admin-qr' | 'community-qr'
  * @param file File to upload
  * @param options Upload options including progress callback and timeout
  */
 export async function uploadImageToStorage(
-  folder: 'deposit-proofs' | 'admin-qr',
+  folder: 'deposit-proofs' | 'admin-qr' | 'community-qr',
   file: File,
   options?: UploadOptions
 ): Promise<string> {

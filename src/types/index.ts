@@ -74,6 +74,8 @@ export interface AppConfigDoc {
   usdtAddress?: string;
   minDeposit?: number;
   minWithdrawal?: number;
+  communityChatLink?: string;
+  communityQrUrl?: string;
   updatedAt?: Timestamp | string | any;
 }
 
@@ -86,5 +88,16 @@ export interface CommissionRecord {
   percentage: number;
   amount: number;
   planName: string;
+  createdAt: Timestamp | string | any;
+}
+
+export interface CouponDoc {
+  id: string;
+  code: string;
+  amount: number;
+  isUsed: boolean;
+  usedBy?: string | null;
+  userMobile?: string | null;
+  usedAt?: Timestamp | string | any;
   createdAt: Timestamp | string | any;
 }

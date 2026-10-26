@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { UserAccount, InvestmentDoc, DepositDoc, WithdrawalDoc } from './types';
+import { UserAccount, InvestmentDoc, DepositDoc, WithdrawalDoc, AppConfigDoc } from './types';
 import { listenToUser, getUserByMobile } from './services/userService';
 import { listenToUserInvestments } from './services/investmentService';
-import { listenToUserDeposits, listenToUserWithdrawals, getAppConfig } from './services/walletService';
+import { listenToUserDeposits, listenToUserWithdrawals, getAppConfig, listenToAppConfig } from './services/walletService';
 import { AuthScreen } from './components/AuthScreen';
 import { Navbar } from './components/Navbar';
 import { InvestmentsPanel } from './components/InvestmentsPanel';
@@ -10,6 +10,7 @@ import { WalletPanel } from './components/WalletPanel';
 import { TeamPanel } from './components/TeamPanel';
 import { DepositModal } from './components/DepositModal';
 import { WithdrawalModal } from './components/WithdrawalModal';
+import { CommunityLoginModal } from './components/CommunityLoginModal';
 import { AdminPortal } from './components/AdminPortal';
 
 export default function App() {
@@ -22,14 +23,18 @@ export default function App() {
   const [investments, setInvestments] = useState<InvestmentDoc[]>([]);
   const [deposits, setDeposits] = useState<DepositDoc[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalDoc[]>([]);
+  const [appConfig, setAppConfig] = useState<AppConfigDoc | null>(null);
 
   // Modals state
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawalOpen, setIsWithdrawalOpen] = useState(false);
+  const [showCommunityModal, setShowCommunityModal] = useState(false);
 
-  // Initialize app configuration if not present
+  // Initialize and listen to app configuration in real time
   useEffect(() => {
-    getAppConfig().catch(console.error);
+    getAppConfig().then(setAppConfig).catch(console.error);
+    const unsub = listenToAppConfig(setAppConfig);
+    return () => unsub();
   }, []);
 
   // Detect secret /admin route via pathname, hash, or secret key combo (Ctrl+Shift+A)
@@ -73,6 +78,7 @@ export default function App() {
       const unsub = listenToUser(savedUserId, (updatedUser) => {
         if (updatedUser) {
           setUser(updatedUser);
+          setShowCommunityModal(true);
         } else {
           sessionStorage.removeItem('alphaland_uid');
         }
@@ -131,7 +137,14 @@ export default function App() {
 
   // 2. Route: Unauthenticated Investor
   if (!user) {
-    return <AuthScreen onSuccess={(loggedInUser) => setUser(loggedInUser)} />;
+    return (
+      <AuthScreen
+        onSuccess={(loggedInUser) => {
+          setUser(loggedInUser);
+          setShowCommunityModal(true);
+        }}
+      />
+    );
   }
 
   // 3. Route: Authenticated Investor Main Application
@@ -198,6 +211,12 @@ export default function App() {
         isOpen={isWithdrawalOpen}
         onClose={() => setIsWithdrawalOpen(false)}
         onGoToInvest={() => setActiveTab('investments')}
+      />
+
+      <CommunityLoginModal
+        isOpen={showCommunityModal}
+        onClose={() => setShowCommunityModal(false)}
+        appConfig={appConfig}
       />
     </div>
   );

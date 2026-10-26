@@ -60,6 +60,56 @@ export async function updateAdminDepositQr(file: File, onProgress?: (percent: nu
 }
 
 /**
+ * Updates the community chat link in settings/appConfig
+ */
+export async function updateCommunityChatLink(link: string): Promise<void> {
+  try {
+    const configDocRef = doc(db, SETTINGS_COLLECTION, APP_CONFIG_DOC_ID);
+    await setDoc(
+      configDocRef,
+      {
+        communityChatLink: link.trim(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error('Error updating community chat link:', error);
+    throw error;
+  }
+}
+
+/**
+ * Uploads community QR code to Firebase Storage ('community-qr/') and updates settings/appConfig
+ */
+export async function updateCommunityQr(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<string> {
+  try {
+    const downloadUrl = await uploadImageToStorage('community-qr', file, {
+      customName: `community_qr_${Date.now()}`,
+      onProgress,
+    });
+    const configDocRef = doc(db, SETTINGS_COLLECTION, APP_CONFIG_DOC_ID);
+
+    await setDoc(
+      configDocRef,
+      {
+        communityQrUrl: downloadUrl,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return downloadUrl;
+  } catch (error) {
+    console.error('Upload error in updateCommunityQr:', error);
+    throw error;
+  }
+}
+
+/**
  * Real-time listener for all pending deposits
  */
 export function listenToPendingDeposits(callback: (deposits: DepositDoc[]) => void): () => void {

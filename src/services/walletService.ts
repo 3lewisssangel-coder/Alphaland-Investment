@@ -50,6 +50,8 @@ export async function getAppConfig(): Promise<AppConfigDoc> {
       bankName: 'BDO / UnionBank Merchant Direct',
       minDeposit: 50,
       minWithdrawal: 100,
+      communityChatLink: 'https://t.me/alphaland_official_group',
+      communityQrUrl: SAMPLE_QR_SVG,
       updatedAt: serverTimestamp(),
     };
     await setDoc(configDocRef, initialConfig);
@@ -62,6 +64,8 @@ export async function getAppConfig(): Promise<AppConfigDoc> {
       gcashName: 'ALPHALAND FINANCE CORP',
       minDeposit: 50,
       minWithdrawal: 100,
+      communityChatLink: 'https://t.me/alphaland_official_group',
+      communityQrUrl: SAMPLE_QR_SVG,
     };
   }
 }

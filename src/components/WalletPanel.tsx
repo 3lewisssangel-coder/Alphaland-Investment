@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { DepositDoc, InvestmentDoc, UserAccount, WithdrawalDoc } from '../types';
+import { RedeemCouponCard } from './RedeemCouponCard';
 
 interface WalletPanelProps {
   user: UserAccount;
@@ -107,6 +108,9 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Redeem Promotional Coupon Card */}
+      <RedeemCouponCard user={user} />
 
       {/* Transactions History Header & Tabs */}
       <div className="space-y-4">

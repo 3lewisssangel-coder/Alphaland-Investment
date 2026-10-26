@@ -30,5 +30,10 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read, write: if true;
     }
+
+    // Coupons collection: code, amount, isUsed, usedBy, usedAt, createdAt
+    match /coupons/{couponId} {
+      allow read, write: if true;
+    }
   }
 }
