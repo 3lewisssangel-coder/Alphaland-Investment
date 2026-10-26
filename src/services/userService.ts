@@ -63,10 +63,13 @@ export async function registerUser(
     throw new Error('A user with this mobile number already exists. Please log in.');
   }
 
-  // Verify referral code if provided
+  // Check if referral code is provided (URL param or manually typed)
+  const hasReferralCode = Boolean(referralCodeFromUrl && referralCodeFromUrl.trim());
   let validReferrerCode: string | null = null;
-  if (referralCodeFromUrl && referralCodeFromUrl.trim()) {
-    const cleanRef = referralCodeFromUrl.trim().toUpperCase();
+  let initialBalance = 0;
+
+  if (hasReferralCode) {
+    const cleanRef = referralCodeFromUrl!.trim().toUpperCase();
     try {
       const refQuery = query(
         collection(db, USERS_COLLECTION),
@@ -75,10 +78,19 @@ export async function registerUser(
       const refSnap = await getDocs(refQuery);
       if (!refSnap.empty) {
         validReferrerCode = cleanRef;
+      } else {
+        validReferrerCode = cleanRef;
       }
     } catch (err) {
       console.warn('Error checking referral code:', err);
+      validReferrerCode = cleanRef;
     }
+    // Set 30 initial balance when referral code is provided
+    initialBalance = 30;
+  } else {
+    // Set 0 initial balance when no referral code is provided
+    validReferrerCode = null;
+    initialBalance = 0;
   }
 
   const newReferralCode = generateReferralCode();
@@ -88,7 +100,7 @@ export async function registerUser(
   const newUserPayload = {
     mobileNumber: cleanMobile,
     password: password.trim(),
-    balance: 0,
+    balance: initialBalance,
     referralCode: newReferralCode,
     referredBy: validReferrerCode,
     createdAt: serverTimestamp(),

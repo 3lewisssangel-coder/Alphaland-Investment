@@ -13,6 +13,7 @@ import {
   Award,
   Loader2,
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { loginUser, registerUser } from '../services/userService';
 import { UserAccount } from '../types';
 
@@ -64,6 +65,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
         }
 
         const newUser = await registerUser(cleanMobile, password, referralCode || null);
+        if (referralCode && referralCode.trim()) {
+          confetti({
+            particleCount: 70,
+            spread: 60,
+            origin: { y: 0.6 },
+          });
+        }
         onSuccess(newUser);
       } else {
         const loggedInUser = await loginUser(cleanMobile, password);
@@ -213,10 +221,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                     <label className="font-semibold text-slate-300 uppercase tracking-wider">
                       Referral Sponsor Code (Optional)
                     </label>
-                    {referralCode && (
-                      <span className="text-emerald-400 font-bold flex items-center space-x-1">
-                        <CheckCircle className="w-3 h-3" />
-                        <span>Sponsor Captured</span>
+                    {referralCode ? (
+                      <span className="text-emerald-400 font-bold flex items-center space-x-1 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>+₱30 Bonus Activated</span>
+                      </span>
+                    ) : (
+                      <span className="text-amber-400 text-[11px] font-medium">
+                        Enter code for ₱30 bonus
                       </span>
                     )}
                   </div>
@@ -227,8 +239,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                     placeholder="e.g. ALP-W49K"
                     className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500/50 transition"
                   />
-                  <p className="text-[11px] text-slate-500">
-                    If invited by a friend, keep their code to link to their team.
+                  <p className="text-[11px] text-slate-400">
+                    {referralCode
+                      ? '✓ Valid referral code: You will receive an instant ₱30 starting balance upon account creation!'
+                      : 'Have a referral code? Entering one grants an instant ₱30 starting balance in your account. Leave blank to start with ₱0.'}
                   </p>
                 </div>
               </>
